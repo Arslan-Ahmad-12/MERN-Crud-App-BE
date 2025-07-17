@@ -1,14 +1,25 @@
 const User = require("../models/userModel");
 const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
+const { get } = require("mongoose");
 
 // Generate Access Token (short-lived)
-const generateAccessToken = (userId) => {
-  return jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: "15m" });
+const generateAccessToken = (user) => {
+  return jwt.sign(
+    { id: user._id,
+      role: user.role,
+      permissions: user.permissions,
+     },
+     process.env.JWT_SECRET, { expiresIn: "15m" });
 };
 
 // Generate Refresh Token (long-lived)
-const generateRefreshToken = (userId) => {
-  return jwt.sign({ id: userId }, process.env.JWT_REFRESH_SECRET, {
+const generateRefreshToken = (user) => {
+  return jwt.sign(
+    { id: user._id,
+    // role: user.role,
+    // permissions: user.permissions
+   }, process.env.JWT_REFRESH_SECRET, {
     expiresIn: "7d",
   });
 };
@@ -61,8 +72,8 @@ const loginUser = async (req, res) => {
     const user = await User.findOne({ email });
 
     if (user && (await user.matchPassword(password))) {
-      const accessToken = generateAccessToken(user._id);
-      const refreshToken = generateRefreshToken(user._id);
+      const accessToken = generateAccessToken(user);
+      const refreshToken = generateRefreshToken(user);
 
       res.cookie("refreshToken", refreshToken, {
         httpOnly: true,
@@ -115,9 +126,62 @@ const logoutUser = (req, res) => {
   res.status(200).json({ message: "Logged out successfully" });
 };
 
+// @desc    Create user by admin
+// @route   POST /api/users/create
+// @access  Private/Admin
+const createUserByAdmin = async (req, res) => {
+  const { name, email, password, role, permissions } = req.body;
+
+  if (!name || !email || !password || !role) {
+    return res.status(400).json({ message: "Missing required fields" });
+  }
+
+  const existing = await User.findOne({ email });
+  if (existing) {
+    return res.status(400).json({ message: "User already exists" });
+  }
+
+  // const hashed = await bcrypt.hash(password, 10);
+
+  const newUser = await User.create({
+    name,
+    email,
+    password: password,
+    role,
+    permissions,
+  });
+
+  res.status(201).json({
+    _id: newUser._id,
+    name: newUser.name,
+    email: newUser.email,
+    role: newUser.role,
+    permissions: newUser.permissions,
+  });
+};
+
+const getMe = async (req, res) => {
+  const user = await User.findById(req.user._id).select("-password");
+
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  res.status(200).json({
+    _id: user._id,
+    // name: user.name,
+    // email: user.email,
+    // role: user.role,
+    permissions: user.permissions,
+  });
+};
+
+
 module.exports = {
   registerUser,
   loginUser,
   refreshAccessToken,
   logoutUser,
+  createUserByAdmin,
+  getMe,
 };

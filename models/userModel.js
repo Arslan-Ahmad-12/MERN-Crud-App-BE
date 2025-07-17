@@ -16,6 +16,7 @@ const userSchema = new mongoose.Schema(
       enum: ["user","staff", "admin", "superadmin"],
       default: "user",
     },
+    permissions: [{ type: String }],
   },
   { timestamps: true }
 );
